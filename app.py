@@ -40,3 +40,55 @@ for c in sorted(countries, key=lambda x: x["cases"], reverse=True)[:10]:
 
 st.caption("Country data is live and auto-updated")
 
+
+st.divider()
+st.subheader("🌍 World COVID-19 Heat Map (Live)")
+
+import pandas as pd
+import pydeck as pdk
+
+@st.cache_data(ttl=1800)
+def load_world_map_data():
+    url = "https://disease.sh/v3/covid-19/countries"
+    data = requests.get(url).json()
+
+    rows = []
+    for c in data:
+        if c.get("countryInfo") and c["countryInfo"].get("lat"):
+            rows.append({
+                "country": c["country"],
+                "lat": c["countryInfo"]["lat"],
+                "lon": c["countryInfo"]["long"],
+                "cases": c["cases"]
+            })
+
+    return pd.DataFrame(rows)
+
+df_map = load_world_map_data()
+
+layer = pdk.Layer(
+    "ScatterplotLayer",
+    data=df_map,
+    get_position="[lon, lat]",
+    get_radius="cases / 500",
+    get_fill_color="[255, 0, 0, 140]",
+    pickable=True,
+)
+
+view_state = pdk.ViewState(
+    latitude=20,
+    longitude=0,
+    zoom=1,
+)
+
+deck = pdk.Deck(
+    layers=[layer],
+    initial_view_state=view_state,
+    tooltip={
+        "html": "<b>{country}</b><br/>Cases: {cases}",
+        "style": {"color": "white"}
+    },
+)
+
+st.pydeck_chart(deck)
+
