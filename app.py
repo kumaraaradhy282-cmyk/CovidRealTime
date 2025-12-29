@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 import requests
-import plotly.express as px
+import matplotlib.pyplot as plt
 from datetime import datetime
 
 # -------------------------------
-# Streamlit Page Config
+# Page Config
 # -------------------------------
 st.set_page_config(
     page_title="Real-Time COVID-19 Dashboard",
@@ -14,30 +14,27 @@ st.set_page_config(
 )
 
 st.title("🦠 Real-Time COVID-19 Dashboard")
-st.caption("Live data from real-world sources • MVP built with Streamlit")
+st.caption("Live real-world COVID-19 data (MVP)")
 
 # -------------------------------
-# Helper Functions
+# Data Functions
 # -------------------------------
 @st.cache_data(ttl=3600)
 def get_countries():
     url = "https://disease.sh/v3/covid-19/countries"
-    response = requests.get(url)
-    data = response.json()
+    data = requests.get(url).json()
     return sorted([c["country"] for c in data])
 
 @st.cache_data(ttl=3600)
 def get_country_data(country):
     url = f"https://disease.sh/v3/covid-19/historical/{country}?lastdays=365"
-    response = requests.get(url)
-    data = response.json()
-    timeline = data["timeline"]
+    data = requests.get(url).json()["timeline"]
 
     df = pd.DataFrame({
-        "date": timeline["cases"].keys(),
-        "cases": timeline["cases"].values(),
-        "deaths": timeline["deaths"].values(),
-        "recovered": timeline["recovered"].values(),
+        "date": data["cases"].keys(),
+        "cases": data["cases"].values(),
+        "deaths": data["deaths"].values(),
+        "recovered": data["recovered"].values(),
     })
 
     df["date"] = pd.to_datetime(df["date"])
@@ -46,17 +43,16 @@ def get_country_data(country):
 @st.cache_data(ttl=600)
 def get_current_stats(country):
     url = f"https://disease.sh/v3/covid-19/countries/{country}"
-    response = requests.get(url)
-    return response.json()
+    return requests.get(url).json()
 
 # -------------------------------
 # Sidebar
 # -------------------------------
-st.sidebar.header("🌍 Settings")
+st.sidebar.header("🌍 Select Country")
 
 countries = get_countries()
-selected_country = st.sidebar.selectbox(
-    "Select Country",
+country = st.sidebar.selectbox(
+    "Country",
     countries,
     index=countries.index("USA") if "USA" in countries else 0
 )
@@ -64,49 +60,42 @@ selected_country = st.sidebar.selectbox(
 # -------------------------------
 # Load Data
 # -------------------------------
-df = get_country_data(selected_country)
-stats = get_current_stats(selected_country)
+df = get_country_data(country)
+stats = get_current_stats(country)
 
 # -------------------------------
 # Metrics
 # -------------------------------
-col1, col2, col3, col4 = st.columns(4)
+c1, c2, c3, c4 = st.columns(4)
 
-col1.metric("Total Cases", f"{stats['cases']:,}")
-col2.metric("Total Deaths", f"{stats['deaths']:,}")
-col3.metric("Recovered", f"{stats['recovered']:,}")
-col4.metric("Active Cases", f"{stats['active']:,}")
+c1.metric("Total Cases", f"{stats['cases']:,}")
+c2.metric("Total Deaths", f"{stats['deaths']:,}")
+c3.metric("Recovered", f"{stats['recovered']:,}")
+c4.metric("Active", f"{stats['active']:,}")
 
-st.markdown("---")
-
-# -------------------------------
-# Interactive Graph
-# -------------------------------
-fig = px.line(
-    df,
-    x="date",
-    y=["cases", "deaths", "recovered"],
-    title=f"COVID-19 Trend in {selected_country}",
-    labels={
-        "value": "Number of People",
-        "date": "Date",
-        "variable": "Metric"
-    },
-    template="plotly_dark"
-)
-
-fig.update_layout(
-    hovermode="x unified",
-    legend_title_text="",
-    title_x=0.5
-)
-
-st.plotly_chart(fig, use_container_width=True)
+st.divider()
 
 # -------------------------------
-# Raw Data (Optional MVP Feature)
+# Beautiful Graph (Matplotlib)
 # -------------------------------
-with st.expander("📄 View Raw Data"):
+fig, ax = plt.subplots(figsize=(12, 5))
+
+ax.plot(df["date"], df["cases"], label="Cases", linewidth=2)
+ax.plot(df["date"], df["deaths"], label="Deaths", linewidth=2)
+ax.plot(df["date"], df["recovered"], label="Recovered", linewidth=2)
+
+ax.set_title(f"COVID-19 Trends in {country}", fontsize=16)
+ax.set_xlabel("Date")
+ax.set_ylabel("People")
+ax.legend()
+ax.grid(alpha=0.3)
+
+st.pyplot(fig)
+
+# -------------------------------
+# Raw Data
+# -------------------------------
+with st.expander("📄 Show Raw Data"):
     st.dataframe(df)
 
 # -------------------------------
@@ -114,5 +103,5 @@ with st.expander("📄 View Raw Data"):
 # -------------------------------
 st.caption(
     f"Last updated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')} | "
-    "Data source: disease.sh (Johns Hopkins / WHO)"
+    "Source: disease.sh (WHO / Johns Hopkins)"
 )
